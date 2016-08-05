@@ -1,0 +1,10 @@
+JH.0=lm(JH.biomass~JH.height-1) #使用-1来删除截距项
+summary(JH.0)
+plot(JH.height,JH.biomass,xlim=c(0,400))
+abline(JH.0)
+
+QG.0=lm(QG.biomass~QG.height-1)
+summary(QG.0)
+plot(QG.height,QG.biomass,xlim=c(0,450))
+abline(QG.0)
+
