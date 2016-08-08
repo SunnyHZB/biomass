@@ -41,6 +41,95 @@ barplot(yhist$counts, axes = FALSE, xlim = c(0, top), space = 0, horiz = TRUE)
 
 ### 简单相关
 
+```r
+i=1
+for (i in 1:260)
+{
+    ct=cor.test(Height,gene[,i],method="spearman") #之前经过shapiro.test没有找到表达量符合正态分布的基因
+    if (ct$p.value<0.01)  print(names(gene)[i])
+}
+```
+
+p<0.01水平：Gene 62.  
+p<0.05水平：Gene 34, 65, 77, 88, 146, 171, 195, 251, 260.  
+（没有做JH和QG两地数据的分别筛选）  
+
 ### 矩阵相关
+
+#### 剔除FPKM中位数为0的基因
+
+```r
+i=1
+while (i<=260) #使用for语句则默认每次循环后i++，会绕过后面else i=i+1的设定
+{
+   if (i>ncol(gene))  break #否则在删去一些列后i过大可能会报错“undefined column selected”
+    else if (median(gene[,i])==0)  gene=gene[c(-i)] #删去FPKM值中位数为0的列
+    else i=i+1 #若第a列被删去，原第a+1列会补上来，若直接i++会使原第a+1列不经检验就跳过
+}
+```
+
+#### 建立矩阵
+
+```r
+a=NULL #用于暂存后面相除得到的数值
+x=y=z=1 #依次代表JH、QG、Gene下标
+
+while(z<=235) #剔除后剩下235个基因
+{
+    while(x<=12)
+    {
+        while(y<=12)
+        {
+            a=c(a,gene[y+12,z]/gene[x,z]) #固定Gene和JH下标，用QG1~12作分子相除
+            y=y+1
+        }
+        x=x+1 #JH下标+1
+        y=1 #为了接下来能够重新运行while(y<=12)循环
+    }
+    z=z+1 #Gene下标+1
+    x=1
+}
+```
+使用max()查找到相除值中最大值为12537.33，故将极值Inf替换为1×10^6（高2个数量级），NaN替换为0.
+```r
+a=as.character(a)
+a=sub("NaN","0",a1,fixed=TRUE)
+a=sub("Inf","1000000",a1,fixed=TRUE)
+a=as.numeric(a)
+```
+再用此时的a建立表达量矩阵.
+```r
+dim1=c("QG1","QG2","QG3","QG4","QG5","QG6","QG7","QG8","QG9","QG10","QG11","QG12")
+dim2=sub("QG","JH",dim1,fixed=TRUE) #dim1为RowNames，dim2为ColNames
+dim3=names(gene)
+
+gene.matrix=array(a,c(12,12,235),dimnames=list(dim1,dim2,dim3))
+```
+用相似方法建立株高矩阵.  
+
+#### 矩阵相关分析
+
+```r
+library(vegan)
+order=sig=corr=NULL #分别用来暂存找到的基因编号、p值和相关系数
+i=1
+while(i<=235)
+{
+    man=mantel(height.matrix,gene.matrix[,,i],method="spearman",permutations=10000)
+    sig=c(sig,man$signif)
+    corr=c(corr,man$statistic)
+    if (man$signif<0.05)  order=c(order,i)
+    i=i+1
+}
+print(dim3[order])
+[1] "Gene40"  "Gene65"  "Gene95"  "Gene177" "Gene195" "Gene206" "Gene257"
+print(sig[order])
+[1] 0.01509849 0.03999600 0.00659934 0.02999700 0.02739726 0.02629737 0.04739526
+print(corr[order])
+[1] 0.4114945 0.3663900 0.4705826 0.3443132 0.3816398 0.3461605 0.3007196
+```
+p<0.01水平：Gene 95.  
+p<0.05水平：Gene 40, 65, 177, 195, 206, 257.  
+其相关系数都在0.3-0.5左右.  
 
 ### 机器学习
