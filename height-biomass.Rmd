@@ -93,8 +93,8 @@ while(z<=235) #剔除后剩下235个基因
 使用max()查找到相除值中最大值为12537.33，故将极值Inf替换为1×10^6（高2个数量级），NaN替换为0.
 ```r
 a=as.character(a)
-a=sub("NaN","0",a1,fixed=TRUE)
-a=sub("Inf","1000000",a1,fixed=TRUE)
+a=sub("NaN","0",a,fixed=TRUE)
+a=sub("Inf","1000000",a,fixed=TRUE)
 a=as.numeric(a)
 ```
 再用此时的a建立表达量矩阵.
@@ -132,7 +132,7 @@ p<0.01水平：Gene 95.
 p<0.05水平：Gene 40, 65, 177, 195, 206, 257.  
 共7个基因，其相关系数都在0.3-0.5左右.  
 矩阵相关要求中位数大于0，这样确实会损失一部分信息。为了考察其影响，用所有基因的数据按上述方法做了一遍矩阵相关，找到2个中位数为0但置换检验显著的基因，为Gene171和222，其置换检验p值分别为0.00859828和0.04539092，相关系数为0.4771875和0.3017154。  
-*Update*：用median()输出看了一下，Gene171的中位数确实为0没错，但Gene222中位数不为0，只是p值比较接近0.05，第一次置换检验中可能恰好没有被筛选出来。
+_**Update**_：用median()输出看了一下，Gene171的中位数确实为0没错，但Gene222中位数不为0，只是p值比较接近0.05，第一次置换检验中可能恰好没有被筛选出来。
 
 ### 机器学习
 
@@ -149,7 +149,8 @@ zz2=sample(zz2,n) #zz2为1:5的随机排列
 for (i in 1:Z)
 {
     m=zz1[zz2==i] #把数据随机地分成5份，取其中1份作为测试集，其余4份为训练集.
-    RF=randomForest(Height~.,data=w[-m,],mtry=100,ntree=10000) #用训练集建立模型，mtry是number of predictors sampled for spliting at each node，默认是自变量数/3.
+    RF=randomForest(Height~.,data=w[-m,],mtry=100,ntree=10000)
+    #用训练集建立模型，mtry是number of predictors sampled for spliting at each node，默认是自变量数/3.
     y0=predict(RF,w[-m,]) #对训练集的预测.
     y1=predict(RF,w[m,]) #对测试集的预测.
     NMSE0[i]=mean((w[-m,2]-y0)^2)/mean((w[-m,2]-mean(w[-m,2]))^2)
