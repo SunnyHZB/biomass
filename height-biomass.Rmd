@@ -41,6 +41,152 @@ barplot(yhist$counts, axes = FALSE, xlim = c(0, top), space = 0, horiz = TRUE)
 
 ### 简单相关
 
+```r
+i=1
+for (i in 1:260)
+{
+    ct=cor.test(Height,gene[,i],method="spearman") #之前经过shapiro.test没有找到表达量符合正态分布的基因
+    if (ct$p.value<0.01)  print(names(gene)[i])
+}
+```
+
+p<0.01水平：Gene 62.  
+p<0.05水平：Gene 34, 65, 77, 88, 146, 171, 195, 251, 260.  
+共10个基因，没有做JH和QG两地数据的分别筛选。  
+这里存在一个ties的问题，会导致非参数方法Spearman的效果变差。
+
 ### 矩阵相关
 
+#### 剔除FPKM中位数为0的基因
+
+```r
+i=1
+while (i<=260) #使用for语句则默认每次循环后i++，会绕过后面else i=i+1的设定
+{
+   if (i>ncol(gene))  break #否则在删去一些列后i过大可能会报错“undefined column selected”
+    else if (median(gene[,i])==0)  gene=gene[c(-i)] #删去FPKM值中位数为0的列
+    else i=i+1 #若第a列被删去，原第a+1列会补上来，若直接i++会使原第a+1列不经检验就跳过
+}
+```
+#### 建立矩阵
+
+```r
+a=NULL #用于暂存后面相除得到的数值
+x=y=z=1 #依次代表JH、QG、Gene下标
+
+while(z<=235) #剔除后剩下235个基因
+{
+    while(x<=12)
+    {
+        while(y<=12)
+        {
+            a=c(a,gene[y+12,z]/gene[x,z]) #固定Gene和JH下标，用QG1~12作分子相除
+            y=y+1
+        }
+        x=x+1 #JH下标+1
+        y=1 #为了接下来能够重新运行while(y<=12)循环
+    }
+    z=z+1 #Gene下标+1
+    x=1
+}
+```
+使用max()查找到相除值中最大值为12537.33，故将极值Inf替换为1×10^6（高2个数量级），NaN替换为0.
+```r
+a=as.character(a)
+a=sub("NaN","0",a,fixed=TRUE)
+a=sub("Inf","1000000",a,fixed=TRUE)
+a=as.numeric(a)
+```
+再用此时的a建立表达量矩阵.
+```r
+dim1=c("QG1","QG2","QG3","QG4","QG5","QG6","QG7","QG8","QG9","QG10","QG11","QG12")
+dim2=sub("QG","JH",dim1,fixed=TRUE) #dim1为RowNames，dim2为ColNames
+dim3=names(gene)
+
+gene.matrix=array(a,c(12,12,235),dimnames=list(dim1,dim2,dim3))
+```
+用相似方法建立株高矩阵.  
+
+#### 矩阵相关分析
+
+```r
+library(vegan)
+order=sig=corr=NULL #分别用来暂存找到的基因编号、p值和相关系数
+i=1
+while(i<=235)
+{
+    man=mantel(height.matrix,gene.matrix[,,i],method="spearman",permutations=10000)
+    sig=c(sig,man$signif)
+    corr=c(corr,man$statistic)
+    if (man$signif<0.05)  order=c(order,i)
+    i=i+1
+}
+print(dim3[order])
+[1] "Gene40"  "Gene65"  "Gene95"  "Gene177" "Gene195" "Gene206" "Gene257"
+print(sig[order])
+[1] 0.01509849 0.03999600 0.00659934 0.02999700 0.02739726 0.02629737 0.04739526
+print(corr[order])
+[1] 0.4114945 0.3663900 0.4705826 0.3443132 0.3816398 0.3461605 0.3007196
+```
+p<0.01水平：Gene 95.  
+p<0.05水平：Gene 40, 65, 177, 195, 206, 257.  
+共7个基因，其相关系数都在0.3-0.5左右.  
+矩阵相关要求中位数大于0，这样确实会损失一部分信息。为了考察其影响，用所有基因的数据按上述方法做了一遍矩阵相关，找到2个中位数为0但置换检验显著的基因，为Gene171和222，其置换检验p值分别为0.00859828和0.04539092，相关系数为0.4771875和0.3017154。  
+_**Update**_：用median()输出看了一下，Gene171的中位数确实为0没错，但Gene222中位数不为0，只是p值比较接近0.05，第一次置换检验中可能恰好没有被筛选出来。
+
 ### 机器学习
+
+####数据下标的划分  
+```r
+n=24 #观测值个数，即南荻个体数
+Z=5 #交叉验证的折数
+zz1=1:n #zz1为所有观测值的下标
+zz2=rep(1:Z,ceiling(n/Z))[1:n]
+zz2=sample(zz2,n) #zz2为1:5的随机排列
+```
+####随机森林回归和交叉验证
+```r
+for (i in 1:Z)
+{
+    m=zz1[zz2==i] #把数据随机地分成5份，取其中1份作为测试集，其余4份为训练集.
+    RF=randomForest(Height~.,data=w[-m,],mtry=100,ntree=10000)
+    #用训练集建立模型，mtry是number of predictors sampled for spliting at each node，默认是自变量数/3.
+    y0=predict(RF,w[-m,]) #对训练集的预测.
+    y1=predict(RF,w[m,]) #对测试集的预测.
+    NMSE0[i]=mean((w[-m,2]-y0)^2)/mean((w[-m,2]-mean(w[-m,2]))^2)
+    NMSE[i]=mean((w[m,2]-y1)^2)/mean((w[m,2]-mean(w[m,2]))^2)
+} #对训练集和测试集分别得到5个标准化均方误差（NMSE），根据其公式定义看应该是均方误差除以方差得到.
+(mean(NMSE0)) #输出训练集5次平均的NMSE
+(mean(NMSE)) #测试集
+```
+反复试了几次，交叉验证的结果，还是跟上次差不多，不一一列出了。  
+5折交叉验证训练集的NMSE在0.18似乎还不错，测试集的NMSE一直大于1。尝试增加了函数中的mtry和ntree改进不大（后来上网查了一下，有人说默认的mtry一般不用改，往往都是加tree的数量，在精度和运算时间中权衡），倒是几次重新抽样建立5个集对结果的影响不小，NMSE从1.95到1.37都有。  
+因为自变量个数远大于观测值个数，感觉回归拟合时最终得到什么样的方程是较为不确定的，在很大程度上取决于用哪一部分数据建立模型；另外如果“抽样没抽好”，就会看到有某一个集做测试集时NMSE极大，从而得出很大的平均值。可能这就是为什么重新sample建立5个集对结果的影响会比较大，而且再增加tree的数量能改善的也有限。  
+有点茫然，不是很清楚怎么去调整改进。  
+
+####给出变量重要性
+```r
+RF=randomForest(Height~.,data=w,mtry=100,ntree=10000,importance=TRUE,importanceSD=T)
+imSD=sort(RF$importanceSD,decreasing=TRUE) #从置换检验的标准误差角度给出变量重要性
+imAccu=sort(RF$importance[,1],decreasing=TRUE) #从预测精度角度给出
+imMSE=sort(RF$importance[,2],decreasing=TRUE) #从均方误差角度给出
+
+(imSD[1:10])
+   Gene62   Gene195    Gene72    Gene94   Gene260    Gene88    Gene77    Gene14 
+16.082090 12.188445 10.931648 10.769899  9.823089  8.958934  8.673335  8.377055 
+   Gene43   Gene214 
+ 8.249838  8.190552 
+ 
+(imAccu[1:10])
+   Gene62   Gene195    Gene88   Gene260   Gene171    Gene77   Gene117    Gene14 
+301.46258 109.54764  60.59024  60.09107  52.19416  41.05383  34.45220  29.15351 
+   Gene44    Gene34 
+ 19.75451  14.06321 
+ 
+(imMSE[1:10])
+  Gene62  Gene195  Gene214   Gene72   Gene77  Gene260   Gene88   Gene94   Gene14 
+9862.699 5675.353 3745.121 3672.607 3551.497 3437.481 3040.673 2736.628 2673.034 
+ Gene171 
+2654.348 
+```
+共筛选出14个基因：Gene 14, 34, 43, 44, 62, 72, 77, 88, 94, 117, 171, 195, 214, 260.
