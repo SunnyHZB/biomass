@@ -41,19 +41,74 @@ barplot(yhist$counts, axes = FALSE, xlim = c(0, top), space = 0, horiz = TRUE)
 
 ### 简单相关
 
+####非参数方法Spearman和Kendall
 ```r
 i=1
 for (i in 1:260)
 {
     ct=cor.test(Height,gene[,i],method="spearman") #之前经过shapiro.test没有找到表达量符合正态分布的基因
-    if (ct$p.value<0.01)  print(names(gene)[i])
+    if (ct$p.value<0.05)  print(names(gene)[i])
 }
 ```
 
+用上述代码分别进行了Spearman和Kendall秩相关分析，Spearman方法结果如下：  
 p<0.01水平：Gene 62.  
 p<0.05水平：Gene 34, 65, 77, 88, 146, 171, 195, 251, 260.  
-共10个基因，没有做JH和QG两地数据的分别筛选。  
-这里存在一个ties的问题，会导致非参数方法Spearman的效果变差。
+Kendall相关只多出一个p=0.0496的Gene 13，其他基因与Spearman相关都相同。  
+以上，共输出11个基因，没有做JH和QG两地数据的分别筛选。  
+这里存在一个ties的问题，会导致非参数方法Spearman/Kendall的效果变差。
+
+####Goodman-Kruskal方法
+```r
+library(GoodmanKruskal)
+attach(w)
+GKtau(Height,Gene1)
+   xName yName Nx Ny tauxy tauyx
+1 Height Gene1 21 17 0.903 0.703
+```
+Nx和Ny分别代表Height和Gene1分别有多少个水平（视作分类变量）。另外可以看到输出中并没有给出p值。  
+根据该程序包的说明：  
+> The Goodman and Kruskal tau measure is an **asymmetric** association measure between two categorical variables, based on the extent to which variation in one variable can be explained by the other.
+
+由于我们希望了解Gene对Height的影响，因此这里应该关注tauyx。
+```r
+for (i in 1:260)
+{
+    GK=GKtau(Height,gene[,i])
+    if (GK$tauyx>=0.9)  print(names(gene)[i])
+}
+```
+tauyx≥0.95：Gene 168, 219, 227, 248.  
+tauyx≥0.9：Gene 137, 153, 159, 169, 210, 212, 218, 224, 228, 233, 245, 246.  
+即使设定在tauyx≥0.9水平，也输出了很多基因（共16个）。但上面分析时没有统一Height和Gene的level个数一致，不知道对结果会不会有影响，因此进行下一步验证。  
+Gene表达量数据由于0比较多，level都少于Height，在将Height划分为有序分类变量时会有一部分信息损失。  
+```r
+for (i in 1:260)
+    gene.ca[,i]=as.ordered(gene[,i]) #将Gene转换为有序变量
+
+for (i in 1:260)
+{
+    Height.ca=Height
+    level.num=length(unique(gene.ca[,i])) #去重后统计该基因表达量有多少个不同值，即多少个不同水平。
+    Height.ca=GroupNumeric(Height,n=level.num) 
+    #使Height的水平个数与该基因相同，GroupNumeric为GoodmanKruskal包里的一个函数，用n=level.num限定对Height分组的组数。
+    GK=GKtau(Height.ca,gene.ca[,i])
+    if (GK$tauyx>=0.9)  print(names(gene.ca)[i])
+}
+```
+输出结果与不统一level时完全一致。  
+所以，这个方法得出的结果就是非常奇怪……  
+
+####Spearman, Kendall和Goodman-Kruskal方法的一点比较
+
+在网上查到的一些解释如下，来自Cross Validated（不知道靠不靠谱？）：  
+> Spearman is used in place of usual linear correlations, and that Kendall-Tau is less direct and more closely resembles Goodman-Kruskal Gamma.  
+> **Spearman rho vs Kendall tau.** These two are so much computationally different that you *cannot* directly compare their magnitudes. Spearman is usually higher by 1/4 to 1/3 and this makes one incorrectly conclude that Spearman is “better” for a particular dataset. The difference between rho and tau is in their ideology, proportion-of-variance for rho and probability for tau.  
+> Rho is a usual Pearson r applied for ranked data, and like r, is **more sensitive to points with large moments** (that is, deviations from cloud centre) than to points with small moments. Tau is an extension of Gamma and is **equally sensitive to all the data points**, so it is less sensitive to peculiarities in shape of the ranked cloud.  
+> Tau is more “general” than rho, for rho is warranted only when you believe the underlying (model, or functional in population) relationship between the variables is **strictly monotonic**. While Tau allows for nonmonotonic underlying curve and measures which monotonic “trend”, positive or negative, prevails there overall. Rho is comparable with r in magnitude; tau is not.  
+> **Kendall tau as Gamma**. Tau is just a standardized form of Gamma. Several related measures all have numerator P−Q but differ in normalizing *denominator*.  
+
+我们的数据极值点比较多，而Spearman对极值点更为敏感，所以有可能会倾向于得出更大的rho（假相关？）。另外，Spearman方法更适用于（要求？）两个变量是单调线性相关的。因此，Kendall和Goodman-Kruskal这样更“general”的方法也许更合适。  
 
 ### 矩阵相关
 
