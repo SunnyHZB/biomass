@@ -70,7 +70,7 @@ GKtau(Height,Gene1)
 ```
 Nx和Ny分别代表Height和Gene1分别有多少个水平（视作分类变量）。另外可以看到输出中并没有给出p值。  
 根据该程序包的说明：  
-> The Goodman and Kruskal tau measure is an **asymmetric** association measure between two categorical variables, based on the extent to which variation in one variable can be explained by the other.
+> 　　The Goodman and Kruskal tau measure is an **asymmetric** association measure between two categorical variables, based on the extent to which variation in one variable can be explained by the other.
 
 由于我们希望了解Gene对Height的影响，因此这里应该关注tauyx。
 ```r
@@ -104,20 +104,23 @@ for (i in 1:260)
 ####Spearman, Kendall和Goodman-Kruskal方法的一点比较
 
 在网上查到的一些解释如下，来自Cross Validated（不知道靠不靠谱？）：  
-> Spearman is used in place of usual linear correlations, and that Kendall-Tau is less direct and more closely resembles Goodman-Kruskal Gamma.  
-> **Spearman rho vs Kendall tau.** These two are so much computationally different that you *cannot* directly compare their magnitudes. Spearman is usually higher by 1/4 to 1/3 and this makes one incorrectly conclude that Spearman is “better” for a particular dataset. The difference between rho and tau is in their ideology, proportion-of-variance for rho and probability for tau.  
-> Rho is a usual Pearson r applied for ranked data, and like r, is **more sensitive to points with large moments** (that is, deviations from cloud centre) than to points with small moments. Tau is an extension of Gamma and is **equally sensitive to all the data points**, so it is less sensitive to peculiarities in shape of the ranked cloud.  
-> Tau is more “general” than rho, for rho is warranted only when you believe the underlying (model, or functional in population) relationship between the variables is **strictly monotonic**. While Tau allows for nonmonotonic underlying curve and measures which monotonic “trend”, positive or negative, prevails there overall. Rho is comparable with r in magnitude; tau is not.  
-> **Kendall tau as Gamma**. Tau is just a standardized form of Gamma. Several related measures all have numerator P−Q but differ in normalizing *denominator*.  
+> 　　Spearman is used in place of usual linear correlations, and that Kendall-Tau is less direct and more closely resembles Goodman-Kruskal Gamma.  
+> 　　**Spearman rho vs Kendall tau.** These two are so much computationally different that you *cannot* directly compare their magnitudes. Spearman is usually higher by 1/4 to 1/3 and this makes one incorrectly conclude that Spearman is “better” for a particular dataset. The difference between rho and tau is in their ideology, proportion-of-variance for rho and probability for tau.  
+> 　　Rho is a usual Pearson r applied for ranked data, and like r, is **more sensitive to points with large moments** (that is, deviations from cloud centre) than to points with small moments. Tau is an extension of Gamma and is **equally sensitive to all the data points**, so it is less sensitive to peculiarities in shape of the ranked cloud.  
+> 　　Tau is more “general” than rho, for rho is warranted only when you believe the underlying (model, or functional in population) relationship between the variables is **strictly monotonic**. While Tau allows for nonmonotonic underlying curve and measures which monotonic “trend”, positive or negative, prevails there overall. Rho is comparable with r in magnitude; tau is not.  
+> 　　**Kendall tau as Gamma**. Tau is just a standardized form of Gamma. Several related measures all have numerator P−Q but differ in normalizing *denominator*.  
 
 我们的数据极值点比较多，而Spearman对极值点更为敏感，所以有可能会倾向于得出更大的rho（假相关？）。另外，Spearman方法更适用于（要求？）两个变量是单调线性相关的。因此，Kendall和Goodman-Kruskal这样更“general”的方法也许更合适。  
 
 ### 回归分析
 以下使用的两种回归分析都在mblm程序包中，使用同一个函数mblm( )。  
-其中若设定repeated=FALSE，则“a single median estimators are calculated”，对应Theil-Sen single median method.  
-若设定repeated=TRUE (default)，则对应Siegel repeated medians.  
+其中若设定repeated=FALSE，则“a single median estimators are calculated”，对应Theil-Sen single median method；若设定repeated=TRUE (default)，则对应Siegel repeated medians.  
 根据mblm程序包说明：  
-> The breakdown point of Theil-Sen method is about 29%, Siegel extended it to 50%, so these regression methods are very robust. Additionally, if the errors are normally distributed and no outliers are present, the estimators are very similar to classic least squares.
+> 　　The breakdown point of Theil-Sen method is about 29%, Siegel extended it to 50%, so these regression methods are very robust. Additionally, if the errors are normally distributed and no outliers are present, the estimators are very similar to classic least squares.
+
+其中breakdown point的定义和一些说明如下（据Wikipedia）：  
+> 　　The breakdown point of an estimator is the proportion of incorrect observations (e.g. arbitrarily large observations) an estimator can handle before giving an incorrect (e.g. arbitrarily large) result.  
+> 　　Intuitively, we can understand that a breakdown point cannot exceed 50% because if more than half of the observations are contaminated, it is not possible to distinguish between the underlying distribution and the contaminating distribution. Therefore, the maximum breakdown point is 0.5 and there are estimators which achieve such a breakdown point. For example, the median has a breakdown point of 0.5.
 
 这两种回归方法都非常稳健，因此应该比普通的最小二乘回归更适合处理株高—表达量这样离群点多、variation大的数据。  
 
@@ -259,10 +262,11 @@ for (i in 1:Z)
 (mean(NMSE0)) #输出训练集5次平均的NMSE
 (mean(NMSE)) #测试集
 ```
-反复试了几次，交叉验证的结果，还是跟上次差不多，不一一列出了。  
-5折交叉验证训练集的NMSE在0.18似乎还不错，测试集的NMSE一直大于1。尝试增加了函数中的mtry和ntree改进不大（后来上网查了一下，有人说默认的mtry一般不用改，往往都是加tree的数量，在精度和运算时间中权衡），倒是几次重新抽样建立5个集对结果的影响不小，NMSE从1.95到1.37都有。  
-因为自变量个数远大于观测值个数，感觉回归拟合时最终得到什么样的方程是较为不确定的，在很大程度上取决于用哪一部分数据建立模型；另外如果“抽样没抽好”，就会看到有某一个集做测试集时NMSE极大，从而得出很大的平均值。可能这就是为什么重新sample建立5个集对结果的影响会比较大，而且再增加tree的数量能改善的也有限。  
+反复试了几次，交叉验证的结果还是都不太好，划分5折训练集的NMSE在0.18左右，测试集的NMSE一直大于1。  
+尝试增加了函数中的mtry和ntree改进不大（后来上网查了一下，有人说默认的mtry一般不用改，往往都是加tree的数量，在精度和运算时间中权衡），倒是几次重新抽样建立5个集对结果的影响不小，NMSE从1.95到1.37都有。  
+因为自变量个数远大于观测值个数，感觉回归拟合时最终得到什么样的方程是较为不确定的，在很大程度上取决于用哪一部分数据建立模型；另外如果“抽样没抽好”，就会看到有某一个集做测试集时NMSE极大，从而得出很大的NMSE平均值。可能这就是为什么重新sample建立5个集对结果的影响会比较大，而且再增加tree的数量能改善的也有限。  
 有点茫然，不是很清楚怎么去调整改进。  
+_**Update**_：用上全部数据回归后，测试集的NMSE可以<1了。  
 
 ####给出变量重要性
 ```r
